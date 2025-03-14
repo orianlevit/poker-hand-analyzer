@@ -20,6 +20,7 @@ import CardSelector from './components/CardSelector';
 import { useHand } from '../contexts/HandContext';
 import type { Card as CardType, Action, Position, PlayerAction } from '../types/hand';
 import PokerTable from './components/PokerTable';
+import PokerScreenLayout from './components/PokerScreenLayout';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'River'>;
 
@@ -32,7 +33,7 @@ interface Step {
   complete: boolean;
 }
 
-export default function RiverScreen({ navigation }: Props) {
+export default function RiverScreen({ navigation, route }: Props) {
   const { handData, updateHandData, saveHand } = useHand();
   
   // Step Management
@@ -42,7 +43,7 @@ export default function RiverScreen({ navigation }: Props) {
   ]);
 
   // Game State
-  const [riverCard, setRiverCard] = useState<CardType[]>([]);
+  const [riverCards, setRiverCards] = useState<CardType[]>([]);
   const [playerActions, setPlayerActions] = useState<PlayerAction[]>([]);
   const [observations, setObservations] = useState('');
   
@@ -123,7 +124,7 @@ export default function RiverScreen({ navigation }: Props) {
   // Initialize from context
   useEffect(() => {
     if (handData.riverCard) {
-      setRiverCard([handData.riverCard]);
+      setRiverCards([handData.riverCard]);
       setSteps(prev => prev.map(step => 
         step.type === 'cards' ? { ...step, complete: true } : step
       ));
@@ -177,7 +178,7 @@ export default function RiverScreen({ navigation }: Props) {
   };
 
   const handleCardSelect = (card: CardType) => {
-    setRiverCard(prev => {
+    setRiverCards(prev => {
       let newCards;
       if (prev.some(c => c.rank === card.rank && c.suit === card.suit)) {
         newCards = prev.filter(c => !(c.rank === card.rank && c.suit === card.suit));
@@ -285,7 +286,7 @@ export default function RiverScreen({ navigation }: Props) {
       // Reset current step's data
       switch (steps[currentStepIndex].type) {
         case 'cards':
-          setRiverCard([]);
+          setRiverCards([]);
           break;
         case 'action':
           const currentPos = steps[currentStepIndex].position;
@@ -310,7 +311,7 @@ export default function RiverScreen({ navigation }: Props) {
     const currentStep = steps[currentStepIndex];
     switch (currentStep.type) {
       case 'cards':
-        return riverCard.length === 1;
+        return riverCards.length === 1;
       case 'action':
         const currentAction = playerActions.find(p => p.position === currentStep.position);
         return currentAction?.action !== null;
@@ -333,61 +334,85 @@ export default function RiverScreen({ navigation }: Props) {
 
   const renderCurrentStep = () => {
     const currentStep = steps[currentStepIndex];
+    const currentAction = currentStep.type === 'action' ? 
+      playerActions.find(p => p.position === currentStep.position) : 
+      undefined;
 
     switch (currentStep.type) {
       case 'cards':
         return (
-          <View style={styles.stepContainer}>
+          <>
             <Text style={styles.stepTitle}>Select River Card</Text>
             <CardSelector
-              selectedCards={riverCard}
+              selectedCards={riverCards}
               onSelectCard={handleCardSelect}
               maxCards={1}
             />
-          </View>
+          </>
         );
 
       case 'action':
-        const actionPosition = currentStep.position!;
-        const currentAction = playerActions.find(p => p.position === actionPosition);
-        
         return (
-          <View style={styles.stepContainer}>
+          <>
             <Text style={styles.stepTitle}>
-              Action for {actionPosition}
+              Action for {currentStep.position}
             </Text>
             <View style={styles.actionButtons}>
               <TouchableOpacity
-                style={[styles.actionButton, currentAction?.action === 'Fold' && styles.selectedActionButton]}
-                onPress={() => handleAction(actionPosition, 'Fold')}
+                style={[
+                  styles.actionButton,
+                  currentAction?.action === 'Fold' && styles.selectedActionButton
+                ]}
+                onPress={() => handleAction(currentStep.position!, 'Fold')}
               >
-                <Text style={styles.actionButtonText}>Fold</Text>
+                <Text style={[
+                  styles.actionButtonText,
+                  currentAction?.action === 'Fold' && styles.selectedActionButtonText
+                ]}>Fold</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, currentAction?.action === 'Call' && styles.selectedActionButton]}
-                onPress={() => handleAction(actionPosition, 'Call')}
+                style={[
+                  styles.actionButton,
+                  currentAction?.action === 'Call' && styles.selectedActionButton
+                ]}
+                onPress={() => handleAction(currentStep.position!, 'Call')}
               >
-                <Text style={styles.actionButtonText}>Call</Text>
+                <Text style={[
+                  styles.actionButtonText,
+                  currentAction?.action === 'Call' && styles.selectedActionButtonText
+                ]}>Call</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, currentAction?.action === 'Raise' && styles.selectedActionButton]}
-                onPress={() => handleAction(actionPosition, 'Raise')}
+                style={[
+                  styles.actionButton,
+                  currentAction?.action === 'Raise' && styles.selectedActionButton
+                ]}
+                onPress={() => handleAction(currentStep.position!, 'Raise')}
               >
-                <Text style={styles.actionButtonText}>Raise</Text>
+                <Text style={[
+                  styles.actionButtonText,
+                  currentAction?.action === 'Raise' && styles.selectedActionButtonText
+                ]}>Raise</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.actionButton, currentAction?.action === 'Check' && styles.selectedActionButton]}
-                onPress={() => handleAction(actionPosition, 'Check')}
+                style={[
+                  styles.actionButton,
+                  currentAction?.action === 'Check' && styles.selectedActionButton
+                ]}
+                onPress={() => handleAction(currentStep.position!, 'Check')}
               >
-                <Text style={styles.actionButtonText}>Check</Text>
+                <Text style={[
+                  styles.actionButtonText,
+                  currentAction?.action === 'Check' && styles.selectedActionButtonText
+                ]}>Check</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </>
         );
 
       case 'observations':
         return (
-          <View style={styles.stepContainer}>
+          <>
             <Text style={styles.stepTitle}>Additional Observations (Optional)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
@@ -403,73 +428,53 @@ export default function RiverScreen({ navigation }: Props) {
             >
               <Text style={styles.submitButtonText}>Continue</Text>
             </TouchableOpacity>
-          </View>
+          </>
         );
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.content}>
-            <ScrollView 
-              style={styles.scrollView} 
-              contentContainerStyle={styles.scrollContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* Poker Table Visualization */}
-              <View style={styles.tableContainer}>
-                <PokerTable
-                  playerCount={handData.playerCount || 6}
-                  positions={getPositionsInOrder(handData.position || 'BB')}
-                  actions={playerActions}
-                  selectedPosition={handData.position || null}
-                  currentStep={steps[currentStepIndex].type}
-                  stackSize={handData.stackSize?.toString()}
-                  holeCards={handData.holeCards}
-                  currentActionPosition={steps[currentStepIndex].type === 'action' ? steps[currentStepIndex].position : undefined}
-                  communityCards={[...(handData.flopCards || []), ...(handData.turnCard ? [handData.turnCard] : []), ...riverCard]}
-                  smallBlind={handData.smallBlind || 0}
-                  bigBlind={handData.bigBlind || 0}
-                />
-              </View>
+    <PokerScreenLayout
+      tableContent={
+        <PokerTable
+          playerCount={handData.playerCount || 6}
+          positions={getPositionsInOrder(handData.position || 'BB')}
+          actions={playerActions}
+          selectedPosition={handData.position || null}
+          currentStep={steps[currentStepIndex].type}
+          stackSize={handData.stackSize?.toString()}
+          holeCards={handData.holeCards}
+          currentActionPosition={steps[currentStepIndex].type === 'action' ? steps[currentStepIndex].position : undefined}
+          communityCards={[...(handData.flopCards || []), ...(handData.turnCard ? [handData.turnCard] : []), ...riverCards]}
+          smallBlind={handData.smallBlind || 0}
+          bigBlind={handData.bigBlind || 0}
+        />
+      }
+      actionContent={renderCurrentStep()}
+      bottomNavigation={
+        <View style={styles.bottomNavigation}>
+          <TouchableOpacity
+            style={[styles.navButton, currentStepIndex === 0 && styles.disabledButton]}
+            onPress={() => navigation.goBack()}
+            disabled={currentStepIndex === 0}
+          >
+            <Text style={styles.navButtonText}>Back</Text>
+          </TouchableOpacity>
+          
+          <Text style={styles.stepIndicator}>
+            Step {currentStepIndex + 1} of {steps.length}
+          </Text>
 
-              {/* Current Step */}
-              {renderCurrentStep()}
-            </ScrollView>
-
-            {/* Fixed Bottom Navigation */}
-            <View style={styles.bottomNavigation}>
-              <TouchableOpacity
-                style={[styles.navButton, currentStepIndex === 0 && styles.disabledButton]}
-                onPress={goToPreviousStep}
-                disabled={currentStepIndex === 0}
-              >
-                <Text style={styles.navButtonText}>Back</Text>
-              </TouchableOpacity>
-              
-              <Text style={styles.stepIndicator}>
-                Step {currentStepIndex + 1} of {steps.length}
-              </Text>
-
-              <TouchableOpacity
-                style={[styles.navButton, !isCurrentStepComplete() && styles.disabledButton]}
-                onPress={handleNextStep}
-                disabled={!isCurrentStepComplete()}
-              >
-                <Text style={styles.navButtonText}>
-                  {currentStepIndex === steps.length - 1 ? 'Finish' : 'Next'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-
+          <TouchableOpacity
+            style={[styles.navButton, !isCurrentStepComplete() && styles.disabledButton]}
+            onPress={handleNextStep}
+            disabled={!isCurrentStepComplete()}
+          >
+            <Text style={styles.navButtonText}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      }
+    >
       {/* Raise Modal */}
       <Modal
         visible={raiseModalVisible}
@@ -507,31 +512,11 @@ export default function RiverScreen({ navigation }: Props) {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </PokerScreenLayout>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  keyboardAvoidingView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  tableContainer: {
-    marginBottom: 20,
-  },
-  stepContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-  },
   stepTitle: {
     fontSize: 18,
     fontWeight: '600',
@@ -539,39 +524,21 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    marginBottom: 12,
-  },
-  submitButton: {
-    backgroundColor: '#2C3E50',
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
   actionButtons: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
     justifyContent: 'center',
+    gap: 8,
   },
   actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#34495E',
+    minWidth: 80,
+    alignItems: 'center',
   },
   selectedActionButton: {
     backgroundColor: '#34495E',
@@ -581,31 +548,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  scrollView: {
-    flex: 1,
+  selectedActionButtonText: {
+    color: '#fff',
   },
-  scrollContent: {
-    padding: 16,
-    paddingBottom: 100, // Add padding to account for bottom navigation
-  },
-  bottomNavigation: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 16,
+  input: {
     backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    width: '100%',
+    marginBottom: 12,
   },
-  navButton: {
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  submitButton: {
     backgroundColor: '#2C3E50',
     paddingVertical: 12,
     paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    width: '100%',
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  bottomNavigation: {
+    height: 80,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: '#f5f5f5',
+    paddingBottom: 16,
+  },
+  navButton: {
+    backgroundColor: '#95a5a6',
+    paddingVertical: 12,
+    paddingHorizontal: 32,
     borderRadius: 8,
     minWidth: 100,
     alignItems: 'center',
@@ -675,9 +660,5 @@ const styles = StyleSheet.create({
   },
   modalPrimaryButtonText: {
     color: '#fff',
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
   },
 }); 
