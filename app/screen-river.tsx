@@ -306,6 +306,31 @@ export default function RiverScreen({ navigation }: Props) {
     }
   };
 
+  const isCurrentStepComplete = () => {
+    const currentStep = steps[currentStepIndex];
+    switch (currentStep.type) {
+      case 'cards':
+        return riverCard.length === 1;
+      case 'action':
+        const currentAction = playerActions.find(p => p.position === currentStep.position);
+        return currentAction?.action !== null;
+      case 'observations':
+        return true; // Observations are optional
+      default:
+        return false;
+    }
+  };
+
+  const handleNextStep = () => {
+    if (currentStepIndex < steps.length - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
+    } else {
+      // Save the hand and navigate back to preflop for a new hand
+      saveHand();
+      navigation.navigate('Preflop');
+    }
+  };
+
   const renderCurrentStep = () => {
     const currentStep = steps[currentStepIndex];
 
@@ -391,26 +416,34 @@ export default function RiverScreen({ navigation }: Props) {
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.content}>
-            {/* Poker Table Visualization */}
-            <View style={styles.tableContainer}>
-              <PokerTable
-                playerCount={handData.playerCount || 6}
-                positions={playerActions.map(pa => pa.position)}
-                actions={playerActions}
-                selectedPosition={handData.position || null}
-                currentStep={steps[currentStepIndex].type}
-                stackSize={handData.stackSize?.toString()}
-                holeCards={handData.holeCards}
-                currentActionPosition={steps[currentStepIndex].type === 'action' ? steps[currentStepIndex].position : undefined}
-                communityCards={[...(handData.flopCards || []), ...(handData.turnCard ? [handData.turnCard] : []), ...riverCard]}
-              />
-            </View>
+            <ScrollView 
+              style={styles.scrollView} 
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Poker Table Visualization */}
+              <View style={styles.tableContainer}>
+                <PokerTable
+                  playerCount={handData.playerCount || 6}
+                  positions={getPositionsInOrder(handData.position || 'BB')}
+                  actions={playerActions}
+                  selectedPosition={handData.position || null}
+                  currentStep={steps[currentStepIndex].type}
+                  stackSize={handData.stackSize?.toString()}
+                  holeCards={handData.holeCards}
+                  currentActionPosition={steps[currentStepIndex].type === 'action' ? steps[currentStepIndex].position : undefined}
+                  communityCards={[...(handData.flopCards || []), ...(handData.turnCard ? [handData.turnCard] : []), ...riverCard]}
+                  smallBlind={handData.smallBlind || 0}
+                  bigBlind={handData.bigBlind || 0}
+                />
+              </View>
 
-            {/* Current Step */}
-            {renderCurrentStep()}
+              {/* Current Step */}
+              {renderCurrentStep()}
+            </ScrollView>
 
-            {/* Navigation */}
-            <View style={styles.navigationContainer}>
+            {/* Fixed Bottom Navigation */}
+            <View style={styles.bottomNavigation}>
               <TouchableOpacity
                 style={[styles.navButton, currentStepIndex === 0 && styles.disabledButton]}
                 onPress={goToPreviousStep}
@@ -422,6 +455,16 @@ export default function RiverScreen({ navigation }: Props) {
               <Text style={styles.stepIndicator}>
                 Step {currentStepIndex + 1} of {steps.length}
               </Text>
+
+              <TouchableOpacity
+                style={[styles.navButton, !isCurrentStepComplete() && styles.disabledButton]}
+                onPress={handleNextStep}
+                disabled={!isCurrentStepComplete()}
+              >
+                <Text style={styles.navButtonText}>
+                  {currentStepIndex === steps.length - 1 ? 'Finish' : 'Next'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </TouchableWithoutFeedback>
@@ -538,31 +581,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
   },
-  navigationContainer: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+    paddingBottom: 100, // Add padding to account for bottom navigation
+  },
+  bottomNavigation: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 'auto',
-    paddingTop: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
   },
   navButton: {
     backgroundColor: '#2C3E50',
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
   },
   navButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
+  disabledButton: {
+    backgroundColor: '#95a5a6',
+  },
   stepIndicator: {
     fontSize: 14,
     color: '#2C3E50',
     fontWeight: '500',
-  },
-  disabledButton: {
-    backgroundColor: '#95a5a6',
   },
   modalOverlay: {
     flex: 1,

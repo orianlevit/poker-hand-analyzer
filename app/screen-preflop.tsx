@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   Keyboard,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -365,14 +366,8 @@ export default function PreflopScreen({ navigation }: Props) {
               onChangeText={handleStackSizeChange}
               keyboardType="decimal-pad"
               placeholder="Enter stack size"
-              onSubmitEditing={handleStackSizeSubmit}
+              returnKeyType="done"
             />
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleStackSizeSubmit}
-            >
-              <Text style={styles.submitButtonText}>Submit</Text>
-            </TouchableOpacity>
           </View>
         );
 
@@ -439,17 +434,71 @@ export default function PreflopScreen({ navigation }: Props) {
               placeholder="Any additional observations about the preflop action..."
               multiline
               numberOfLines={4}
+              returnKeyType="done"
             />
-            <TouchableOpacity
-              style={styles.submitButton}
-              onPress={handleObservationsSubmit}
-            >
-              <Text style={styles.submitButtonText}>Continue</Text>
-            </TouchableOpacity>
           </View>
         );
     }
   };
+
+  // Add function to check if current step is complete
+  const isCurrentStepComplete = () => {
+    const currentStep = steps[currentStepIndex];
+    switch (currentStep.type) {
+      case 'position':
+        return true; // Always allow proceeding after viewing positions
+      case 'stack':
+        return stackSize !== '' && !isNaN(parseFloat(stackSize)) && parseFloat(stackSize) > 0;
+      case 'cards':
+        return selectedCards.length === 2;
+      case 'action':
+        const currentAction = playerActions.find(p => p.position === currentStep.position);
+        return currentAction?.action !== null;
+      case 'observations':
+        return true; // Observations are optional
+      default:
+        return false;
+    }
+  };
+
+  // Update the handleNextStep function to handle all step transitions
+  const handleNextStep = () => {
+    const currentStep = steps[currentStepIndex];
+    
+    // Validate current step
+    switch (currentStep.type) {
+      case 'stack':
+        if (!stackSize || isNaN(parseFloat(stackSize)) || parseFloat(stackSize) <= 0) {
+          Alert.alert('Invalid Stack Size', 'Please enter a valid number greater than 0');
+          return;
+        }
+        updateHandData({ stackSize: parseFloat(stackSize) });
+        break;
+      case 'observations':
+        updateHandData({ preflopObservations: observations });
+        navigation.navigate('Flop');
+        return;
+    }
+
+    // Mark current step as complete
+    setSteps(prev => prev.map(step => 
+      step.id === currentStep.id ? { ...step, complete: true } : step
+    ));
+
+    // Find and go to next incomplete step
+    const nextIncompleteStep = steps.findIndex((step, index) => 
+      index > currentStepIndex && !step.complete
+    );
+    
+    if (nextIncompleteStep !== -1) {
+      setCurrentStepIndex(nextIncompleteStep);
+    } else if (steps.every(step => step.complete)) {
+      navigation.navigate('Flop');
+    }
+  };
+
+  const currentStep = steps[currentStepIndex];
+  const positions = getPositionsInOrder(handData.position || 'BB');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -458,28 +507,79 @@ export default function PreflopScreen({ navigation }: Props) {
         style={styles.keyboardAvoidingView}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.content}>
-            {/* Poker Table Visualization */}
-            <View style={styles.tableContainer}>
+          <View style={styles.mainContent}>
+            {/* Table Section */}
+            <View style={styles.tableSection}>
               <PokerTable
                 playerCount={handData.playerCount || 6}
-                positions={getPositionsInOrder(handData.position || 'BB')}
+                positions={positions}
                 actions={playerActions}
-                selectedPosition={position}
-                currentStep={steps[currentStepIndex].type}
-                stackSize={stackSize}
-                holeCards={selectedCards}
-                currentActionPosition={steps[currentStepIndex].type === 'action' ? steps[currentStepIndex].position : undefined}
+                selectedPosition={handData.position || null}
+                currentStep={currentStep.type}
+                stackSize={handData.stackSize?.toString()}
+                holeCards={handData.holeCards}
+                currentActionPosition={currentStep.type === 'action' ? currentStep.position : undefined}
+                communityCards={[]}
                 smallBlind={handData.smallBlind || 0}
                 bigBlind={handData.bigBlind || 0}
               />
             </View>
 
-            {/* Current Step */}
-            {renderCurrentStep()}
+            {/* Action Section */}
+            <View style={styles.actionSection}>
+              {currentStep.type === 'position' && (
+                <>
+                  <Text style={styles.stepTitle}>Select Your Position</Text>
+                  <View style={styles.positionButtons}>
+                    {positions.map((pos: Position) => (
+                      <TouchableOpacity
+                        key={pos}
+                        style={[
+                          styles.positionButton,
+                          position === pos && styles.selectedPositionButton
+                        ]}
+                        onPress={() => handlePositionSelect(pos)}
+                      >
+                        <Text style={[
+                          styles.positionButtonText,
+                          position === pos && styles.selectedPositionButtonText
+                        ]}>
+                          {pos}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
 
-            {/* Navigation */}
-            <View style={styles.navigationContainer}>
+              {currentStep.type === 'stack' && (
+                <>
+                  <Text style={styles.stepTitle}>Enter Stack Size (USD)</Text>
+                  <TextInput
+                    style={styles.stackInput}
+                    value={stackSize}
+                    onChangeText={handleStackSizeChange}
+                    keyboardType="numeric"
+                    placeholder="Enter stack size"
+                    onSubmitEditing={handleStackSizeSubmit}
+                  />
+                </>
+              )}
+
+              {currentStep.type === 'cards' && (
+                <>
+                  <Text style={styles.stepTitle}>Select Your Hole Cards</Text>
+                  <CardSelector
+                    selectedCards={selectedCards}
+                    onSelectCard={handleCardSelect}
+                    maxCards={2}
+                  />
+                </>
+              )}
+            </View>
+
+            {/* Bottom Navigation */}
+            <View style={styles.bottomNavigation}>
               <TouchableOpacity
                 style={[styles.navButton, currentStepIndex === 0 && styles.disabledButton]}
                 onPress={goToPreviousStep}
@@ -491,6 +591,16 @@ export default function PreflopScreen({ navigation }: Props) {
               <Text style={styles.stepIndicator}>
                 Step {currentStepIndex + 1} of {steps.length}
               </Text>
+
+              <TouchableOpacity
+                style={[styles.navButton, !isCurrentStepComplete() && styles.disabledButton]}
+                onPress={handleNextStep}
+                disabled={!isCurrentStepComplete()}
+              >
+                <Text style={styles.navButtonText}>
+                  {currentStepIndex === steps.length - 1 ? 'Next' : 'Next'}
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </TouchableWithoutFeedback>
@@ -545,25 +655,103 @@ const styles = StyleSheet.create({
   keyboardAvoidingView: {
     flex: 1,
   },
-  content: {
+  mainContent: {
     flex: 1,
-    padding: 16,
   },
-  tableContainer: {
+  tableSection: {
+    height: '65%',
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  actionSection: {
+    height: '28%',
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    alignItems: 'center',
+  },
+  stepTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#2C3E50',
     marginBottom: 20,
+    textAlign: 'center',
+  },
+  positionButtons: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  positionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#34495E',
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  selectedPositionButton: {
+    backgroundColor: '#34495E',
+  },
+  positionButtonText: {
+    color: '#34495E',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  selectedPositionButtonText: {
+    color: '#fff',
+  },
+  stackInput: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    width: '100%',
+    marginBottom: 12,
+  },
+  bottomNavigation: {
+    height: '7%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#ddd',
+  },
+  navButton: {
+    backgroundColor: '#2C3E50',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  navButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: '#95a5a6',
+  },
+  stepIndicator: {
+    fontSize: 14,
+    color: '#2C3E50',
+    fontWeight: '500',
   },
   stepContainer: {
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 16,
-    marginBottom: 20,
-  },
-  stepTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 16,
-    textAlign: 'center',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -612,17 +800,18 @@ const styles = StyleSheet.create({
   },
   actionButtons: {
     flexDirection: 'row',
+    justifyContent: 'space-evenly',
     flexWrap: 'wrap',
     gap: 8,
-    justifyContent: 'center',
   },
   actionButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     borderRadius: 8,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#34495E',
+    minWidth: 80,
   },
   selectedActionButton: {
     backgroundColor: '#34495E',
@@ -631,32 +820,11 @@ const styles = StyleSheet.create({
     color: '#34495E',
     fontSize: 16,
     fontWeight: '500',
+    textAlign: 'center',
   },
-  navigationContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 'auto',
-    paddingTop: 16,
-  },
-  navButton: {
-    backgroundColor: '#2C3E50',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-  },
-  navButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  stepIndicator: {
-    fontSize: 14,
-    color: '#2C3E50',
-    fontWeight: '500',
-  },
-  disabledButton: {
-    backgroundColor: '#95a5a6',
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: 'top',
   },
   modalOverlay: {
     flex: 1,
@@ -710,9 +878,5 @@ const styles = StyleSheet.create({
   },
   modalPrimaryButtonText: {
     color: '#fff',
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: 'top',
   },
 }); 

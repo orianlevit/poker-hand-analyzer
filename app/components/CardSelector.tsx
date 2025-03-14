@@ -1,75 +1,52 @@
-import React, { useState } from 'react';
-import {
-  StyleSheet,
-  Text,
-  View,
-  TouchableOpacity,
-  ScrollView,
-} from 'react-native';
+import React from 'react';
+import { StyleSheet, View, TouchableOpacity, Text } from 'react-native';
+import type { Card, Suit, Rank } from '../../types/hand';
 
-type Suit = '♠' | '♣' | '♥' | '♦';
-type Rank = 'A' | 'K' | 'Q' | 'J' | 'T' | '9' | '8' | '7' | '6' | '5' | '4' | '3' | '2';
-type Card = { rank: Rank; suit: Suit };
-
-interface CardSelectorProps {
-  onSelectCard: (card: Card) => void;
+interface Props {
   selectedCards: Card[];
-  maxCards?: number;
+  onSelectCard: (card: Card) => void;
+  maxCards: number;
 }
 
-export default function CardSelector({ onSelectCard, selectedCards, maxCards = 2 }: CardSelectorProps) {
-  const [selectedSuit, setSelectedSuit] = useState<Suit>('♠');
-  
-  const ranks: Rank[] = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+export default function CardSelector({ selectedCards, onSelectCard, maxCards }: Props) {
   const suits: Suit[] = ['♠', '♣', '♥', '♦'];
+  const ranks: Rank[] = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+  
+  const [selectedSuit, setSelectedSuit] = React.useState<Suit | null>(null);
+
+  const handleSuitSelect = (suit: Suit) => {
+    setSelectedSuit(suit === selectedSuit ? null : suit);
+  };
+
+  const handleCardSelect = (rank: Rank) => {
+    if (selectedSuit) {
+      onSelectCard({ rank, suit: selectedSuit });
+      setSelectedSuit(null);
+    }
+  };
 
   const isCardSelected = (rank: Rank, suit: Suit) => {
     return selectedCards.some(card => card.rank === rank && card.suit === suit);
   };
 
-  const renderCard = (rank: Rank) => {
-    const isSelected = isCardSelected(rank, selectedSuit);
-    const isDisabled = selectedCards.length >= maxCards && !isSelected;
-    const card = { rank, suit: selectedSuit };
-    
-    return (
-      <TouchableOpacity
-        key={`${rank}${selectedSuit}`}
-        style={[
-          styles.card,
-          isSelected && styles.selectedCard,
-          isDisabled && styles.disabledCard,
-        ]}
-        onPress={() => !isDisabled && onSelectCard(card)}
-        disabled={isDisabled}
-      >
-        <Text style={[
-          styles.cardText,
-          (selectedSuit === '♥' || selectedSuit === '♦') && styles.redCard,
-          isSelected && styles.selectedCardText,
-        ]}>
-          {rank}
-          {selectedSuit}
-        </Text>
-      </TouchableOpacity>
-    );
-  };
-
   return (
     <View style={styles.container}>
-      <View style={styles.suitSelector}>
+      {/* Suit Selection */}
+      <View style={styles.suitRow}>
         {suits.map((suit) => (
           <TouchableOpacity
             key={suit}
             style={[
               styles.suitButton,
               selectedSuit === suit && styles.selectedSuitButton,
+              (suit === '♥' || suit === '♦') && styles.redSuit
             ]}
-            onPress={() => setSelectedSuit(suit)}
+            onPress={() => handleSuitSelect(suit)}
           >
             <Text style={[
               styles.suitText,
-              (suit === '♥' || suit === '♦') && styles.redCard,
+              selectedSuit === suit && styles.selectedSuitText,
+              (suit === '♥' || suit === '♦') && styles.redText
             ]}>
               {suit}
             </Text>
@@ -77,25 +54,26 @@ export default function CardSelector({ onSelectCard, selectedCards, maxCards = 2
         ))}
       </View>
 
-      <ScrollView style={styles.cardGrid} contentContainerStyle={styles.cardGridContent}>
-        {ranks.map(rank => renderCard(rank))}
-      </ScrollView>
-
-      <View style={styles.selectedCardsContainer}>
-        <Text style={styles.selectedCardsTitle}>Selected Cards: ({selectedCards.length}/{maxCards})</Text>
-        <View style={styles.selectedCardsDisplay}>
-          {selectedCards.map((card, index) => (
-            <Text
-              key={index}
-              style={[
-                styles.selectedCardDisplay,
-                (card.suit === '♥' || card.suit === '♦') && styles.redCard,
-              ]}
-            >
-              {card.rank}{card.suit}
+      {/* Rank Selection */}
+      <View style={styles.rankGrid}>
+        {ranks.map((rank) => (
+          <TouchableOpacity
+            key={rank}
+            style={[
+              styles.rankButton,
+              selectedSuit && styles.rankButtonActive
+            ]}
+            onPress={() => selectedSuit && handleCardSelect(rank)}
+            disabled={!selectedSuit}
+          >
+            <Text style={[
+              styles.rankText,
+              selectedSuit && styles.rankTextActive
+            ]}>
+              {rank}
             </Text>
-          ))}
-        </View>
+          </TouchableOpacity>
+        ))}
       </View>
     </View>
   );
@@ -103,86 +81,68 @@ export default function CardSelector({ onSelectCard, selectedCards, maxCards = 2
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    padding: 16,
+    width: '100%',
+    alignItems: 'center',
     gap: 16,
   },
-  suitSelector: {
+  suitRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
+    justifyContent: 'center',
+    gap: 16,
   },
   suitButton: {
     width: 50,
     height: 50,
     borderRadius: 25,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#ddd',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
   },
   selectedSuitButton: {
+    backgroundColor: '#2C3E50',
     borderColor: '#2C3E50',
-    backgroundColor: '#f5f5f5',
+  },
+  redSuit: {
+    borderColor: '#E74C3C',
   },
   suitText: {
-    fontSize: 24,
-    color: '#000',
+    fontSize: 28,
+    color: '#2C3E50',
   },
-  cardGrid: {
-    maxHeight: 200,
-  },
-  cardGridContent: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-  },
-  card: {
-    width: 45,
-    height: 60,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  selectedCard: {
-    borderColor: '#2C3E50',
-    backgroundColor: '#2C3E50',
-  },
-  disabledCard: {
-    opacity: 0.5,
-  },
-  cardText: {
-    fontSize: 18,
-    color: '#000',
-  },
-  selectedCardText: {
+  selectedSuitText: {
     color: '#fff',
   },
-  redCard: {
+  redText: {
     color: '#E74C3C',
   },
-  selectedCardsContainer: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  selectedCardsTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#2C3E50',
-    marginBottom: 8,
-  },
-  selectedCardsDisplay: {
+  rankGrid: {
     flexDirection: 'row',
-    gap: 16,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 8,
   },
-  selectedCardDisplay: {
-    fontSize: 24,
-    color: '#000',
+  rankButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  rankButtonActive: {
+    borderColor: '#2C3E50',
+  },
+  rankText: {
+    fontSize: 18,
+    color: '#95a5a6',
+    fontWeight: '600',
+  },
+  rankTextActive: {
+    color: '#2C3E50',
   },
 }); 
